@@ -123,8 +123,9 @@ function send(){
 }
 function route(){drawNav();var p=location.hash||"#accueil";if(p==="#connexion")auth();else if(p==="#envoyer")send();else home()}
 window.addEventListener("hashchange",route);
-db.auth.onAuthStateChange(function(e,s){user=s?s.user:null;if(e==="SIGNED_OUT")location.hash="#accueil";route()});
-db.auth.getSession().then(function(r){user=r.data.session?r.data.session.user:null;route()});
+var uid=null;
+db.auth.onAuthStateChange(function(e,s){var nu=s?s.user:null,nid=nu?nu.id:null,changed=nid!==uid;user=nu;uid=nid;if(e==="SIGNED_OUT")location.hash="#accueil";if(changed)route()});
+db.auth.getSession().then(function(r){user=r.data.session?r.data.session.user:null;uid=user?user.id:null;route()});
 </script>
 </body>
 </html>
