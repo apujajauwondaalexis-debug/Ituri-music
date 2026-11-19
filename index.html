@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ituri Music</title>
+<style>
+:root{--bg:#f3f6ef;--surface:#fff;--text:#12261b;--muted:#566a5d;--line:#d5dfd3;--leaf:#1f6b43;--on-leaf:#fff;--sun:#f2b632;--on-sun:#2a1d00;--err:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1f16;--surface:#16301f;--text:#eef5ea;--muted:#9db3a4;--line:#28452f;--leaf:#4cc27f;--on-leaf:#06210f;--err:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:4px solid var(--sun)}
+.brand{font-weight:800;font-size:1.3rem;letter-spacing:-.02em}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav a{color:var(--text);text-decoration:none;font-weight:600;padding:8px 10px;border-radius:8px}
+nav a.on{background:var(--leaf);color:var(--on-leaf)}
+main{max-width:640px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 12px}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px}
+.song{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center}
+.cover{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--leaf);color:var(--on-leaf);display:grid;place-items:center;font-weight:800;font-size:1.3rem}
+.a{color:var(--muted);font-size:.9rem}
+.row{grid-column:1/-1;display:grid;gap:8px}
+audio{width:100%}
+label{display:block;font-weight:600;margin:12px 0 4px}
+input[type=text],input[type=email],input[type=password]{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--text);font:inherit}
+input[type=file]{width:100%;font:inherit}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:600;margin:16px 0}
+.chk input{width:22px;height:22px;margin-top:2px}
+button,.btn{font:inherit;font-weight:700;border-radius:10px;padding:12px 16px;min-height:46px;cursor:pointer;border:0;background:var(--leaf);color:var(--on-leaf);text-align:center;text-decoration:none;display:inline-block}
+button.alt,.btn.alt{background:transparent;color:var(--text);border:1.5px solid var(--line)}
+button:disabled{opacity:.5}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.msg{margin:12px 0;font-weight:600}.msg.err{color:var(--err)}
+.seg{display:flex;gap:8px}.seg label{flex:1;margin:0;font-weight:700}
+.seg input{margin-right:6px}
+.trk{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:10px}
+.hide{display:none}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+<header><div class="brand">Ituri Music</div><nav id="nav"></nav></header>
+<main id="view"></main>
+<script>
+var db=supabase.createClient("https://stjlhkxcdjugtlomlqdn.supabase.co","sb_publishable_0KsRx_xn-8Vo4KbK4wy7QA_tlk_Syc1");
+var user=null,view=document.getElementById("view"),nav=document.getElementById("nav"),mode="login";
+function h(tag,attrs){var e=document.createElement(tag);for(var k in (attrs||{})){if(k==="class")e.className=attrs[k];else if(k==="text")e.textContent=attrs[k];else if(k.slice(0,2)==="on")e[k]=attrs[k];else e.setAttribute(k,attrs[k]);}
+  for(var i=2;i<arguments.length;i++){var c=arguments[i];if(c)e.appendChild(typeof c==="string"?document.createTextNode(c):c);}return e}
+function artistName(){return (user&&user.user_metadata&&user.user_metadata.artist_name)||(user&&user.email.split("@")[0])||""}
+function msg(box,text,err){box.textContent=text;box.className="msg"+(err?" err":"")}
+function drawNav(){var p=location.hash||"#accueil";nav.replaceChildren(
+  h("a",{href:"#accueil",class:p==="#accueil"?"on":""},"Écouter"),
+  h("a",{href:"#envoyer",class:p==="#envoyer"?"on":""},"Envoyer"),
+  user?h("a",{href:"#",onclick:function(e){e.preventDefault();db.auth.signOut()}},"Déconnexion"):h("a",{href:"#connexion",class:p==="#connexion"?"on":""},"Connexion"))}
+async function home(){
+  view.replaceChildren(h("h1",{text:"Dernières musiques"}),h("p",{class:"msg",text:"Chargement…"}));
+  var r=await db.from("songs").select("id,title,artist_name,audio_url,cover_url,albums(title)").order("created_at",{ascending:false}).limit(50);
+  if(r.error){view.replaceChildren(h("h1",{text:"Dernières musiques"}),h("p",{class:"msg err",text:"Erreur : "+r.error.message}));return}
+  var ul=h("ul");
+  r.data.forEach(function(s){
+    var cv=s.cover_url?h("img",{class:"cover",src:s.cover_url,alt:""}):h("div",{class:"cover",text:s.title.charAt(0).toUpperCase()});
+    var ext=(s.audio_url.split(".").pop()||"mp3").split("?")[0];
+    ul.appendChild(h("li",{class:"card song"},cv,
+      h("div",{},h("div",{text:s.title,style:"font-weight:700"}),h("div",{class:"a",text:s.artist_name+(s.albums?" · Album : "+s.albums.title:" · Single")})),
+      h("div",{class:"row"},h("audio",{controls:"",preload:"none",src:s.audio_url}),
+        h("a",{class:"btn alt",href:s.audio_url+"?download="+encodeURIComponent(s.title+"."+ext)},"Télécharger"))));
+  });
+  view.replaceChildren(h("h1",{text:"Dernières musiques"}),r.data.length?ul:h("p",{text:"Aucune musique pour le moment. Les artistes peuvent se connecter et envoyer la première !"}));
+}
+function auth(){
+  var box=h("div",{class:"msg"}),signup=mode==="signup";
+  var name=h("input",{type:"text",id:"nm",autocomplete:"nickname"}),em=h("input",{type:"email",id:"em",autocomplete:"email"}),pw=h("input",{type:"password",id:"pw",autocomplete:signup?"new-password":"current-password"});
+  var btn=h("button",{text:signup?"Créer mon compte":"Se connecter",onclick:async function(){
+    btn.disabled=true;msg(box,"Un instant…");var r;
+    if(signup){if(!name.value.trim()){msg(box,"Écris ton nom d’artiste.",1);btn.disabled=false;return}
+      r=await db.auth.signUp({email:em.value.trim(),password:pw.value,options:{data:{artist_name:name.value.trim()}}});
+      if(!r.error&&!r.data.session){msg(box,"Compte créé. Vérifie ton email pour confirmer, puis connecte-toi.");btn.disabled=false;return}}
+    else r=await db.auth.signInWithPassword({email:em.value.trim(),password:pw.value});
+    if(r.error){msg(box,r.error.message,1);btn.disabled=false}else location.hash="#envoyer"}});
+  view.replaceChildren(h("h1",{text:signup?"Créer un compte artiste":"Connexion artiste"}),
+    signup?h("label",{for:"nm",text:"Nom d’artiste"}):null,signup?name:null,
+    h("label",{for:"em",text:"Email"}),em,h("label",{for:"pw",text:"Mot de passe (8 caractères minimum)"}),pw,box,btn," ",
+    h("button",{class:"alt",text:signup?"J’ai déjà un compte":"Pas de compte ? S’inscrire",onclick:function(){mode=signup?"login":"signup";auth()}}));
+}
+async function up(bucket,file){
+  var ext=(file.name.split(".").pop()||"bin").toLowerCase(),path=user.id+"/"+crypto.randomUUID()+"."+ext;
+  var r=await db.storage.from(bucket).upload(path,file,{contentType:file.type||undefined});
+  if(r.error)throw r.error;return db.storage.from(bucket).getPublicUrl(path).data.publicUrl}
+function send(){
+  if(!user){location.hash="#connexion";return}
+  var box=h("div",{class:"msg"}),tracks=h("div"),isAlbum=false;
+  var title=h("input",{type:"text",id:"at"}),cover=h("input",{type:"file",accept:"image/jpeg,image/png,image/webp",id:"cv"});
+  var albumBox=h("div",{class:"hide"},h("label",{for:"at",text:"Nom de l’album"}),title);
+  var rights=h("input",{type:"checkbox",id:"rt"});
+  function addTrack(){var n=tracks.children.length+1;
+    tracks.appendChild(h("div",{class:"trk"},h("label",{text:"Titre de la chanson "+n}),h("input",{type:"text"}),h("label",{text:"Fichier audio (MP3, WAV, M4A, 50 Mo max)"}),h("input",{type:"file",accept:"audio/*"})))}
+  addTrack();
+  var more=h("button",{class:"alt hide",text:"+ Ajouter une chanson",onclick:addTrack});
+  function setType(a){isAlbum=a;albumBox.className=a?"":"hide";more.className=a?"alt":"alt hide";if(!a)while(tracks.children.length>1)tracks.lastChild.remove()}
+  var seg=h("div",{class:"seg"},
+    h("label",{class:"card"},h("input",{type:"radio",name:"ty",checked:"",onchange:function(){setType(false)}}),"Single"),
+    h("label",{class:"card"},h("input",{type:"radio",name:"ty",onchange:function(){setType(true)}}),"Album"));
+  var btn=h("button",{text:"Envoyer",onclick:async function(){
+    if(!rights.checked){msg(box,"Tu dois confirmer que tu es propriétaire de cette musique.",1);return}
+    var rows=[].slice.call(tracks.children).map(function(t){var i=t.querySelectorAll("input");return{t:i[0].value.trim(),f:i[1].files[0]}});
+    if(rows.some(function(x){return!x.t||!x.f})){msg(box,"Chaque chanson a besoin d’un titre et d’un fichier audio.",1);return}
+    if(isAlbum&&!title.value.trim()){msg(box,"Écris le nom de l’album.",1);return}
+    btn.disabled=true;
+    try{
+      msg(box,"Envoi de la pochette…");var cu=cover.files[0]?await up("covers",cover.files[0]):null,aid=null;
+      if(isAlbum){var a=await db.from("albums").insert({title:title.value.trim(),cover_url:cu}).select("id").single();if(a.error)throw a.error;aid=a.data.id}
+      for(var i=0;i<rows.length;i++){
+        msg(box,"Envoi de la chanson "+(i+1)+" sur "+rows.length+"… (ne ferme pas la page)");
+        var au=await up("audio",rows[i].f);
+        var s=await db.from("songs").insert({title:rows[i].t,artist_name:artistName(),audio_url:au,cover_url:cu,album_id:aid,owns_rights:true});if(s.error)throw s.error}
+      location.hash="#accueil";
+    }catch(e){msg(box,"Erreur : "+(e.message||e),1);btn.disabled=false}}});
+  view.replaceChildren(h("h1",{text:"Envoyer de la musique"}),h("p",{class:"a",text:"Connecté : "+artistName()}),seg,albumBox,
+    h("label",{for:"cv",text:"Pochette (facultatif, image 5 Mo max)"}),cover,tracks,more,
+    h("label",{class:"chk",for:"rt"},rights,h("span",{text:"Je confirme que je suis propriétaire de cette musique et que j’ai le droit de la publier."})),box,btn);
+}
+function route(){drawNav();var p=location.hash||"#accueil";if(p==="#connexion")auth();else if(p==="#envoyer")send();else home()}
+window.addEventListener("hashchange",route);
+db.auth.onAuthStateChange(function(e,s){user=s?s.user:null;if(e==="SIGNED_OUT")location.hash="#accueil";route()});
+db.auth.getSession().then(function(r){user=r.data.session?r.data.session.user:null;route()});
+</script>
+</body>
+</html>
