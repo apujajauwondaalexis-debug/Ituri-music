@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ituri Music</title>
+<style>
+:root{--bg:#f3f6ef;--sf:#fff;--tx:#12261b;--mu:#566a5d;--ln:#d5dfd3;--lf:#1f6b43;--on:#fff;--sun:#f2b632;--er:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1f16;--sf:#16301f;--tx:#eef5ea;--mu:#9db3a4;--ln:#28452f;--lf:#4cc585;--on:#06210f;--er:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:12px 16px;border-bottom:4px solid var(--sun)}
+.brand{font-weight:800;font-size:1.3rem}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+nav a{color:var(--tx);text-decoration:none;font-weight:600;padding:8px 10px;border-radius:8px}
+nav a.on{background:var(--lf);color:var(--on)}
+main{max-width:640px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:1.5rem;margin:18px 0 12px}h2{font-size:1.1rem}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+ol{padding-left:22px;display:grid;gap:8px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:12px}
+.song{display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center}
+.cover{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--lf);color:var(--on);display:grid;place-items:center;font-weight:800}
+.a{color:var(--mu);font-size:.9rem}
+.row{grid-column:1/-1;display:grid;gap:8px}
+.bar{display:flex;gap:6px;flex-wrap:wrap}
+audio{width:100%}
+input[type=text],input[type=email],input[type=password],input[type=file]{width:100%;padding:12px;border:1.5px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--tx);font:inherit;margin:6px 0}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:600;margin:16px 0}
+.chk input{width:22px;height:22px;margin-top:2px}
+button,.btn{font:inherit;font-weight:700;border-radius:10px;padding:12px 16px;min-height:46px;cursor:pointer;border:0;background:var(--lf);color:var(--on);text-decoration:none;display:block;text-align:center;margin:8px 0}
+.alt{background:transparent;color:var(--tx);border:1.5px solid var(--ln)}
+.sm{display:inline-block;padding:6px 10px;min-height:36px;margin:0;font-size:.85rem}
+.act{border-color:var(--lf);color:var(--lf)}
+button:disabled{opacity:.5}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.msg{margin:12px 0;font-weight:600}.msg.err{color:var(--er)}
+.trk{padding:10px;border:1px dashed var(--ln);border-radius:10px;word-break:break-all}
+.st{font-size:.8rem;color:var(--mu)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+<header><div class="brand">Ituri Music</div><nav id="nav"></nav></header>
+<main id="view"></main>
+<script>
+var db=supabase.createClient("https://stjlhkxcdjugtlomlqdn.supabase.co","sb_publishable_0KsRx_xn-8Vo4KbK4wy7QA_tlk_Syc1");
+var user=null,profile=null,view=document.getElementById("view"),nav=document.getElementById("nav");
+function h(tag,attrs){var e=document.createElement(tag);for(var k in (attrs||{})){if(k==="class")e.className=attrs[k];else if(k==="text")e.textContent=attrs[k];else if(k.slice(0,2)==="on")e[k]=attrs[k];else e.setAttribute(k,attrs[k])}
+for(var i=2;i<arguments.length;i++){var c=arguments[i];if(c)e.appendChild(typeof c==="string"?document.createTextNode(c):c)}return e}
+function msg(t,err){return h("p",{class:"msg"+(err?" err":""),text:t})}
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+function country(){var m=(navigator.language||"").split("-")[1];return m?m.toUpperCase():null}
+function need(){if(user)return true;alert("Connecte-toi d’abord.");location.hash="#compte";return false}
+var q=new URLSearchParams(location.search).get("ref");if(q)store("ref",q.toUpperCase());
+
+function lk(href,t){return h("a",{href:href,class:(location.hash||"#accueil")===href?"on":"",text:t})}
+function drawNav(){nav.replaceChildren(lk("#accueil","Écouter"),lk("#classements","Classements"),lk("#envoyer","Envoyer"),lk("#compte",user?"Mon compte":"Connexion"))}
+async function route(){drawNav();var p=location.hash||"#accueil";view.replaceChildren(msg("Chargement…"));
+try{if(p==="#classements")await ranks();else if(p==="#envoyer")upload();else if(p==="#compte")await account();else await home()}
+catch(e){view.replaceChildren(msg("Erreur : "+(e.message||e),1))}}
+
+function toggle(tbl,col,id,state,btn,on,off){
+btn.textContent=state[id]?on:off;if(state[id])btn.classList.add("act");
+btn.onclick=async function(){if(!need())return;btn.disabled=true;var o={};o[col]=id;
+var r=state[id]?await db.from(tbl).delete().eq(col,id):await db.from(tbl).insert(o);
+btn.disabled=false;if(r.error){alert(r.error.message);return}
+state[id]=state[id]?0:1;btn.textContent=state[id]?on:off;btn.classList.toggle("act",!!state[id])};return btn}
+
+function card(s,my){
+var cv=s.cover_url?h("img",{class:"cover",src:s.cover_url,alt:""}):h("div",{class:"cover",text:s.title.charAt(0).toUpperCase()});
+var counted=0,au=h("audio",{controls:"",preload:"none",src:s.audio_url});
+au.onplay=function(){if(counted)return;counted=1;db.from("plays").insert({song_id:s.id,kind:"play",country:country()}).then(function(){})};
+var mine=user&&user.id===s.artist_id;
+var follow=mine?null:toggle("follows","artist_id",s.artist_id,my.follows,h("button",{class:"btn alt sm"}),"Abonné ✓","+ Suivre");
+var like=toggle("likes","song_id",s.id,my.likes,h("button",{class:"btn alt sm"}),"♥ Aimé","♡ Aimer");
+var rep=toggle("reposts","song_id",s.id,my.reposts,h("button",{class:"btn alt sm"}),"↻ Republié","↻ Republier");
+var com=h("button",{class:"btn alt sm",text:"💬 Commenter ("+s.comments+")",onclick:async function(){if(!need())return;
+var t=prompt("Ton commentaire (3 caractères minimum) :");if(!t)return;
+var r=await db.from("comments").insert({song_id:s.id,body:t.trim()});alert(r.error?"Commentaire trop court ou erreur.":"Merci pour ton commentaire !")}});
+var dl=h("button",{class:"btn sm",text:"⬇ Télécharger",onclick:async function(){if(!need())return;
+var ok=await db.rpc("can_download",{p_song:s.id});
+if(!ok.data){alert("Pour télécharger : aime, republie et commente cette chanson d’abord.");return}
+await db.from("plays").insert({song_id:s.id,kind:"download",country:country()});
+var a=h("a",{href:s.audio_url,download:s.title+" - "+s.artist_name+" [Ituri-Music].mp3",target:"_blank"});document.body.appendChild(a);a.click();a.remove()}});
+return h("li",{class:"card song"},cv,
+h("div",{},h("div",{text:s.title,style:"font-weight:700"}),h("div",{class:"a",text:s.artist_name+" · "+s.verdict})),
+h("div",{class:"row"},au,h("div",{class:"st",text:"▶ "+s.plays+" · ⬇ "+s.downloads+" · ♥ "+s.likes+" · ↻ "+s.reposts+" · "+s.score+" pts"}),
+h("div",{class:"bar"},like,rep,com,follow,dl)))}
+
+async function home(){
+var r=await db.from("v_song_stats").select("*").order("created_at",{ascending:false}).limit(50);if(r.error)throw r.error;
+var my={likes:{},reposts:{},follows:{}};
+if(user){var a=await Promise.all([db.from("likes").select("song_id"),db.from("reposts").select("song_id"),db.from("follows").select("artist_id")]);
+(a[0].data||[]).forEach(function(x){my.likes[x.song_id]=1});(a[1].data||[]).forEach(function(x){my.reposts[x.song_id]=1});(a[2].data||[]).forEach(function(x){my.follows[x.artist_id]=1})}
+var ul=h("ul");r.data.forEach(function(s){ul.appendChild(card(s,my))});
+view.replaceChildren(h("h1",{text:"Dernières musiques"}),r.data.length?ul:msg("Aucune musique pour le moment. Les artistes peuvent en envoyer !"))}
+
+async function ranks(){
+var a=await Promise.all([db.from("v_artist_stats").select("*").order("followers",{ascending:false}).order("plays",{ascending:false}).limit(10),
+db.from("v_song_stats").select("*").order("score",{ascending:false}).limit(20)]);
+var u1=h("ol"),u2=h("ol");
+(a[0].data||[]).forEach(function(x){u1.appendChild(h("li",{text:x.artist_name+" — "+x.followers+" abonnés · "+x.plays+" écoutes"}))});
+(a[1].data||[]).forEach(function(x){u2.appendChild(h("li",{text:x.title+" ("+x.artist_name+") — "+x.score+" pts · "+x.verdict+" · ▶ "+x.plays}))});
+view.replaceChildren(h("h1",{text:"Artistes les plus suivis"}),u1,h("h1",{text:"Chansons les plus consommées"}),u2)}
+
+function upload(){
+if(!user){view.replaceChildren(h("h1",{text:"Envoyer une musique"}),msg("Connecte-toi d’abord.",1));return}
+var t=h("input",{type:"text",placeholder:"Titre de la chanson"}),f=h("input",{type:"file",accept:"audio/*"}),c=h("input",{type:"file",accept:"image/*"}),
+ck=h("input",{type:"checkbox"}),out=h("div"),b;
+function fail(x){out.replaceChildren(msg(x,1));b.disabled=false}
+b=h("button",{text:"Envoyer",onclick:async function(){
+var title=t.value.trim(),file=f.files[0],cov=c.files[0];
+if(!title||!file){out.replaceChildren(msg("Le titre et le fichier audio sont obligatoires.",1));return}
+if(!ck.checked){out.replaceChildren(msg("Tu dois confirmer que tu détiens les droits.",1));return}
+b.disabled=true;out.replaceChildren(msg("Envoi en cours…"));
+var id=user.id+"/"+Date.now()+"-",ap=id+file.name.replace(/[^\w.]+/g,"_"),cp=cov?id+cov.name.replace(/[^\w.]+/g,"_"):null;
+var r=await db.storage.from("audio").upload(ap,file);if(r.error){fail(r.error.message);return}
+var cu=null;if(cp){var r2=await db.storage.from("covers").upload(cp,cov);if(!r2.error)cu=db.storage.from("covers").getPublicUrl(cp).data.publicUrl}
+var ins=await db.from("songs").insert({title:title,artist_name:profile?profile.artist_name:"",audio_url:db.storage.from("audio").getPublicUrl(ap).data.publicUrl,cover_url:cu,owns_rights:true,size_bytes:file.size+(cov?cov.size:0)});
+if(ins.error){await db.storage.from("audio").remove([ap]);if(cp)await db.storage.from("covers").remove([cp]);fail(ins.error.message);return}
+location.hash="#accueil"}});
+view.replaceChildren(h("h1",{text:"Envoyer une musique"}),h("label",{text:"Titre"}),t,h("label",{text:"Fichier audio"}),f,h("label",{text:"Pochette (facultatif)"}),c,
+h("label",{class:"chk"},ck,h("span",{text:"Je confirme que je suis propriétaire des droits de cette chanson."})),b,out)}
+
+function authForm(signup){
+var nm=h("input",{type:"text",placeholder:"Nom d’artiste",autocomplete:"nickname"}),em=h("input",{type:"email",placeholder:"Email",autocomplete:"email"}),
+pw=h("input",{type:"password",placeholder:"Mot de passe (6 caractères min.)",autocomplete:signup?"new-password":"current-password"}),box=h("div"),btn;
+function fin(x){box.replaceChildren(msg(x,1));btn.disabled=false}
+btn=h("button",{text:signup?"Créer mon compte":"Se connecter",onclick:async function(){
+btn.disabled=true;box.replaceChildren(msg("Un instant…"));var r;
+if(signup){if(!nm.value.trim()){fin("Écris ton nom d’artiste.");return}
+r=await db.auth.signUp({email:em.value.trim(),password:pw.value,options:{data:{artist_name:nm.value.trim(),ref:store("ref")||""}}})}
+else r=await db.auth.signInWithPassword({email:em.value.trim(),password:pw.value});
+if(r.error){fin(r.error.message);return}
+if(!r.data.session){box.replaceChildren(msg("Vérifie ton email pour confirmer ton compte."));btn.disabled=false}}});
+view.replaceChildren(h("h1",{text:signup?"Créer un compte artiste":"Connexion"}),
+signup&&store("ref")?msg("Tu as été invité(e) par un artiste ✓"):null,
+signup?nm:null,em,pw,btn,box,
+h("button",{class:"btn alt",text:signup?"J’ai déjà un compte":"Créer un compte",onclick:function(){authForm(!signup)}}))}
+
+async function account(){
+if(!user){authForm(false);return}
+var p=profile||{artist_name:"",referral_code:"",quota_bytes:0};
+var a=await Promise.all([db.rpc("my_referral_progress"),db.from("songs").select("size_bytes").eq("artist_id",user.id)]);
+var pr=(a[0].data&&a[0].data[0])||{invited:0,valid:0};
+var used=(a[1].data||[]).reduce(function(s,x){return s+Number(x.size_bytes)},0);
+var gb=function(n){return (n/1073741824).toFixed(2)+" Go"};
+var link=location.origin+location.pathname+"?ref="+p.referral_code;
+view.replaceChildren(h("h1",{text:p.artist_name||"Mon compte"}),
+h("p",{text:"Stockage utilisé : "+gb(used)+" sur "+gb(p.quota_bytes)}),
+h("h2",{text:"Parrainage : +1 Go pour chaque 3 artistes invités qui publient une chanson"}),
+h("p",{text:"Progression : "+(pr.valid%3)+"/3 (invités : "+pr.invited+", valides : "+pr.valid+")"}),
+h("p",{class:"trk",text:link}),
+h("a",{class:"btn",href:"https://wa.me/?text="+encodeURIComponent("Rejoins-moi sur Ituri Music, la plateforme musicale de l’Ituri : "+link),target:"_blank",text:"Partager sur WhatsApp"}),
+h("button",{class:"btn alt",text:"Déconnexion",onclick:function(){db.auth.signOut()}}))}
+
+window.addEventListener("hashchange",route);
+db.auth.onAuthStateChange(function(ev,s){user=s?s.user:null;profile=null;
+setTimeout(async function(){if(user){var r=await db.from("profiles").select("*").eq("id",user.id).maybeSingle();profile=r.data}route()},0)});
+</script>
+</body>
+</html>
